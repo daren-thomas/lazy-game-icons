@@ -50,6 +50,7 @@ def draw_svg_clipped(
     grid_stroke_gray: float,
     circle_fill: Color,
     foreground_hex: str,
+    tooltip_root: Path | None = None,
 ):
     """Draw a single cell:
        - white 1x1 in cell
@@ -116,6 +117,20 @@ def draw_svg_clipped(
     c.setStrokeGray(grid_stroke_gray)
     c.rect(cell_x, cell_y, cell_size, cell_size, stroke=1, fill=0)
     c.restoreState()
+
+    tooltip_path: Path | str = svg_path
+    if tooltip_root is not None:
+        try:
+            tooltip_path = svg_path.relative_to(tooltip_root)
+        except ValueError:
+            tooltip_path = Path(os.path.relpath(svg_path, tooltip_root))
+
+    tooltip_text = (
+        tooltip_path.as_posix() if isinstance(tooltip_path, Path) else str(tooltip_path)
+    )
+
+    annotation_rect = [cell_x, cell_y, cell_x + cell_size, cell_y + cell_size]
+    c.addAnnotation({"Subtype": "/Text", "Rect": annotation_rect, "Contents": tooltip_text})
 
 
 def load_svg_with_foreground(svg_path: Path, foreground_hex: str):
@@ -273,6 +288,7 @@ def main(argv=None):
             grid_stroke_gray=GRID_STROKE_GRAY,
             circle_fill=background_color,
             foreground_hex=foreground_hex,
+            tooltip_root=input_dir,
         )
 
     c.save()
