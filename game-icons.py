@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
+import io
 import math
 import os
+import string
 import sys
 import argparse
 from pathlib import Path
 
+from reportlab.lib.colors import Color, toColor
 from reportlab.lib.pagesizes import A4, landscape, portrait
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
@@ -45,6 +48,8 @@ def draw_svg_clipped(
     circle_diameter: float,
     grid_stroke_pt: float,
     grid_stroke_gray: float,
+    circle_fill: Color,
+    foreground_hex: str,
 ):
     """Draw a single cell:
        - white 1x1 in cell
@@ -69,13 +74,13 @@ def draw_svg_clipped(
     clip_path.circle(cx, cy, clip_radius)
     c.clipPath(clip_path, stroke=0, fill=0)
 
-    # 3) Inside the circle: fill BLACK so the window is black
-    c.setFillColorRGB(0, 0, 0)
+    # 3) Inside the circle: fill with the requested background color
+    c.setFillColor(circle_fill)
     c.circle(cx, cy, clip_radius, stroke=0, fill=1)
 
     # 4) Draw the SVG on top, scaled to fit the inscribed square
     try:
-        drawing = svg2rlg(str(svg_path))
+        drawing = load_svg_with_foreground(svg_path, foreground_hex)
     except Exception as e:
         c.restoreState()
         print(f"[WARN] Skipping {svg_path}: {e}")
@@ -111,6 +116,31 @@ def draw_svg_clipped(
     c.setStrokeGray(grid_stroke_gray)
     c.rect(cell_x, cell_y, cell_size, cell_size, stroke=1, fill=0)
     c.restoreState()
+
+
+def load_svg_with_foreground(svg_path: Path, foreground_hex: str):
+    svg_text = svg_path.read_text(encoding="utf-8")
+    hex_lower = foreground_hex.lower()
+    hex_upper = foreground_hex.upper()
+    svg_text = svg_text.replace("#fff", hex_lower).replace("#FFF", hex_upper)
+    return svg2rlg(io.BytesIO(svg_text.encode("utf-8")))
+
+
+def parse_color(value: str, *, default: str) -> tuple[Color, str]:
+    raw = (value or default).strip()
+    if not raw:
+        raw = default
+
+    if raw.startswith("#"):
+        color_spec = raw
+    elif len(raw) in (3, 6) and all(ch in string.hexdigits for ch in raw):
+        color_spec = f"#{raw}"
+    else:
+        color_spec = raw
+
+    color = toColor(color_spec)
+    hex_value = "#" + color.hexval()
+    return color, hex_value
 
 
 def parse_args(argv=None):
@@ -159,6 +189,16 @@ def parse_args(argv=None):
         default=0.2,
         help="Grid stroke gray level in [0,1], lower=darker (default: 0.2).",
     )
+    parser.add_argument(
+        "--foreground",
+        default="fff",
+        help="Foreground color for the SVG paths (default: fff).",
+    )
+    parser.add_argument(
+        "--background",
+        default="000",
+        help="Background color for the circle clip (default: 000).",
+    )
 
     return parser.parse_args(argv)
 
@@ -175,6 +215,13 @@ def main(argv=None):
 
     # Ensure output directory exists
     output_pdf.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        _foreground_color, foreground_hex = parse_color(args.foreground, default="fff")
+        background_color, _background_hex = parse_color(args.background, default="000")
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
     # Page size
     pagesize = A4
@@ -217,6 +264,8 @@ def main(argv=None):
             circle_diameter=CIRCLE_DIAMETER,
             grid_stroke_pt=GRID_STROKE_PT,
             grid_stroke_gray=GRID_STROKE_GRAY,
+            circle_fill=background_color,
+            foreground_hex=foreground_hex,
         )
 
     c.save()
