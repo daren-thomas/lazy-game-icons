@@ -25,7 +25,7 @@ Check: python3 --version
 mkdir -p ~/Projects/icon-pdf && cd ~/Projects/icon-pdf
 
 # 2) Save the script
-#    (paste your make_icon_pdf.py here)
+#    (place game-icons.py here)
 
 # 3) Create & activate a virtual environment
 python3 -m venv .venv
@@ -36,12 +36,12 @@ pip install --upgrade pip
 pip install reportlab svglib
 
 # 5) Run it
-python make_icon_pdf.py "/Users/daren/projects/game-icons/black-background" \
+python game-icons.py "/Users/daren/projects/game-icons/black-background" \
   "~/Downloads/icons-grid.pdf"
 ```
 
 ## Usage
-python make_icon_pdf.py INPUT_DIR OUTPUT_PDF [options]
+python game-icons.py INPUT_DIR OUTPUT_PDF [options]
 
 
 ## Positional arguments
@@ -66,19 +66,32 @@ python make_icon_pdf.py INPUT_DIR OUTPUT_PDF [options]
 - `--grid-gray FLOAT`
   Grid gray level in [0,1] (lower = darker). Default: 0.2.
 
+- `--foreground COLOR`
+  Foreground color to apply to white `#fff` fills/strokes inside the SVGs. Accepts CSS color names or hex (with/without `#`). Default: `fff`.
+
+- `--background COLOR`
+  Fill color for the circular token background. Accepts CSS color names or hex (with/without `#`). Default: `000`.
+
+- `--annotate`
+  Include a non-clickable tooltip per icon that displays the SVG path relative to the input directory (disabled by default).
+
 ## Examples
 
 ```
 # Default layout (A4 portrait, 1.0" cells, 0.9" circle)
-python make_icon_pdf.py "./icons" "./icons-grid.pdf"
+python game-icons.py "./icons" "./icons-grid.pdf"
 
 # Landscape A4 with darker hairline and smaller (0.8") circle
-python make_icon_pdf.py "./icons" "./icons-grid.pdf" \
+python game-icons.py "./icons" "./icons-grid.pdf" \
   --page A4landscape --circle-diameter-in 0.8 --grid-gray 0.1
 
 # Bigger cells (1.25") while keeping a 0.9" circle
-python make_icon_pdf.py "./icons" "./icons-grid.pdf" \
+python game-icons.py "./icons" "./icons-grid.pdf" \
   --cell-size-in 1.25 --circle-diameter-in 0.9
+
+# Light blue icons on a black background with tooltips enabled
+python game-icons.py "./icons" "./icons-grid.pdf" \
+  --foreground lightblue --background 000 --annotate
 ```
 
 ## How it works
@@ -92,23 +105,10 @@ python make_icon_pdf.py "./icons" "./icons-grid.pdf" \
 
 ```
 your-project/
-├─ make_icon_pdf.py
+├─ game-icons.py
 ├─ README.md
 └─ (optional) requirements.txt
 ```
-
-Create requirements.txt (optional):
-
-```
-pip freeze > requirements.txt
-# later:
-pip install -r requirements.txt
-```
-
-Minimal content typically looks like:
-
-reportlab
-svglib
 
 ## Troubleshooting
 
