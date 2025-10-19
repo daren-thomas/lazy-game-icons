@@ -139,7 +139,14 @@ def parse_color(value: str, *, default: str) -> tuple[Color, str]:
         color_spec = raw
 
     color = toColor(color_spec)
-    hex_value = "#" + color.hexval()
+
+    # ReportLab's ``hexval`` includes a ``0x`` prefix (e.g., ``0x00ff00``).
+    # Normalize the color to the standard ``#rrggbb`` format expected by web
+    # colors so downstream code receives the canonical representation.
+    r = max(0, min(255, int(round(color.red * 255))))
+    g = max(0, min(255, int(round(color.green * 255))))
+    b = max(0, min(255, int(round(color.blue * 255))))
+    hex_value = f"#{r:02x}{g:02x}{b:02x}"
     return color, hex_value
 
 
