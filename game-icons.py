@@ -131,7 +131,33 @@ def draw_svg_clipped(
     )
 
     annotation_rect = [cell_x, cell_y, cell_x + cell_size, cell_y + cell_size]
-    c.addAnnotation({"Subtype": "/Text", "Rect": annotation_rect, "Contents": tooltip_text})
+    add_text_annotation(c, annotation_rect, tooltip_text)
+
+
+def add_text_annotation(c: canvas.Canvas, rect: list[float], text: str) -> None:
+    annotation_dict = {"Subtype": "/Text", "Rect": rect, "Contents": text}
+
+    add_annotation = getattr(c, "addAnnotation", None)
+    if callable(add_annotation):
+        add_annotation(annotation_dict)
+        return
+
+    legacy_add = getattr(c, "_addAnnotation", None)
+    if not callable(legacy_add):
+        return
+
+    try:
+        from reportlab.pdfbase import pdfdoc
+
+        pdf_annotation = pdfdoc.PDFDictionary()
+        pdf_annotation["Type"] = pdfdoc.PDFName("Annot")
+        pdf_annotation["Subtype"] = pdfdoc.PDFName("Text")
+        pdf_annotation["Rect"] = pdfdoc.PDFArray(rect)
+        pdf_annotation["Contents"] = pdfdoc.PDFString(text)
+        pdf_annotation["Name"] = pdfdoc.PDFName("Comment")
+        legacy_add(pdf_annotation)
+    except Exception:
+        legacy_add(annotation_dict)
 
 
 def load_svg_with_foreground(svg_path: Path, foreground_hex: str):
