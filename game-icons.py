@@ -6,6 +6,7 @@ import string
 import sys
 import argparse
 from pathlib import Path
+from typing import Optional, Union
 
 from reportlab.lib.colors import Color, toColor
 from reportlab.lib.pagesizes import A4, landscape, portrait
@@ -50,7 +51,7 @@ def draw_svg_clipped(
     grid_stroke_gray: float,
     circle_fill: Color,
     foreground_hex: str,
-    tooltip_root: Path | None = None,
+    tooltip_root: Optional[Path] = None,
 ):
     """Draw a single cell:
        - white 1x1 in cell
@@ -118,7 +119,7 @@ def draw_svg_clipped(
     c.rect(cell_x, cell_y, cell_size, cell_size, stroke=1, fill=0)
     c.restoreState()
 
-    tooltip_path: Path | str = svg_path
+    tooltip_path: Union[Path, str] = svg_path
     if tooltip_root is not None:
         try:
             tooltip_path = svg_path.relative_to(tooltip_root)
