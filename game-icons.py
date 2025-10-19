@@ -51,6 +51,7 @@ def draw_svg_clipped(
     grid_stroke_gray: float,
     circle_fill: Color,
     foreground_hex: str,
+    annotate: bool = False,
     tooltip_root: Optional[Path] = None,
 ):
     """Draw a single cell:
@@ -119,19 +120,20 @@ def draw_svg_clipped(
     c.rect(cell_x, cell_y, cell_size, cell_size, stroke=1, fill=0)
     c.restoreState()
 
-    tooltip_path: Union[Path, str] = svg_path
-    if tooltip_root is not None:
-        try:
-            tooltip_path = svg_path.relative_to(tooltip_root)
-        except ValueError:
-            tooltip_path = Path(os.path.relpath(svg_path, tooltip_root))
+    if annotate:
+        tooltip_path: Union[Path, str] = svg_path
+        if tooltip_root is not None:
+            try:
+                tooltip_path = svg_path.relative_to(tooltip_root)
+            except ValueError:
+                tooltip_path = Path(os.path.relpath(svg_path, tooltip_root))
 
-    tooltip_text = (
-        tooltip_path.as_posix() if isinstance(tooltip_path, Path) else str(tooltip_path)
-    )
+        tooltip_text = (
+            tooltip_path.as_posix() if isinstance(tooltip_path, Path) else str(tooltip_path)
+        )
 
-    annotation_rect = [cell_x, cell_y, cell_x + cell_size, cell_y + cell_size]
-    add_text_annotation(c, annotation_rect, tooltip_text)
+        annotation_rect = [cell_x, cell_y, cell_x + cell_size, cell_y + cell_size]
+        add_text_annotation(c, annotation_rect, tooltip_text)
 
 
 def add_text_annotation(c: canvas.Canvas, rect: list[float], text: str) -> None:
@@ -248,6 +250,11 @@ def parse_args(argv=None):
         default="000",
         help="Background color for the circle clip (default: 000).",
     )
+    parser.add_argument(
+        "--annotate",
+        action="store_true",
+        help="Include PDF text annotations with the icon's relative path.",
+    )
 
     return parser.parse_args(argv)
 
@@ -315,7 +322,8 @@ def main(argv=None):
             grid_stroke_gray=GRID_STROKE_GRAY,
             circle_fill=background_color,
             foreground_hex=foreground_hex,
-            tooltip_root=input_dir,
+            annotate=args.annotate,
+            tooltip_root=input_dir if args.annotate else None,
         )
 
     c.save()
