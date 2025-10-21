@@ -6,6 +6,7 @@ import string
 import sys
 import argparse
 from pathlib import Path
+from typing import Optional, Union
 
 from reportlab.lib.colors import Color, toColor
 from reportlab.lib.pagesizes import A4, landscape, portrait
@@ -50,6 +51,8 @@ def draw_svg_clipped(
     grid_stroke_gray: float,
     circle_fill: Color,
     foreground_hex: str,
+    annotate: bool = False,
+    tooltip_root: Optional[Path] = None,
 ):
     """Draw a single cell:
        - white 1x1 in cell
@@ -116,6 +119,47 @@ def draw_svg_clipped(
     c.setStrokeGray(grid_stroke_gray)
     c.rect(cell_x, cell_y, cell_size, cell_size, stroke=1, fill=0)
     c.restoreState()
+
+    if annotate:
+        tooltip_path: Union[Path, str] = svg_path
+        if tooltip_root is not None:
+            try:
+                tooltip_path = svg_path.relative_to(tooltip_root)
+            except ValueError:
+                tooltip_path = Path(os.path.relpath(svg_path, tooltip_root))
+
+        tooltip_text = (
+            tooltip_path.as_posix() if isinstance(tooltip_path, Path) else str(tooltip_path)
+        )
+
+        annotation_rect = [cell_x, cell_y, cell_x + cell_size, cell_y + cell_size]
+        add_text_annotation(c, annotation_rect, tooltip_text)
+
+
+def add_text_annotation(c: canvas.Canvas, rect: list[float], text: str) -> None:
+    annotation_dict = {"Subtype": "/Text", "Rect": rect, "Contents": text}
+
+    add_annotation = getattr(c, "addAnnotation", None)
+    if callable(add_annotation):
+        add_annotation(annotation_dict)
+        return
+
+    legacy_add = getattr(c, "_addAnnotation", None)
+    if not callable(legacy_add):
+        return
+
+    try:
+        from reportlab.pdfbase import pdfdoc
+
+        pdf_annotation = pdfdoc.PDFDictionary()
+        pdf_annotation["Type"] = pdfdoc.PDFName("Annot")
+        pdf_annotation["Subtype"] = pdfdoc.PDFName("Text")
+        pdf_annotation["Rect"] = pdfdoc.PDFArray(rect)
+        pdf_annotation["Contents"] = pdfdoc.PDFString(text)
+        pdf_annotation["Name"] = pdfdoc.PDFName("Comment")
+        legacy_add(pdf_annotation)
+    except Exception:
+        legacy_add(annotation_dict)
 
 
 def load_svg_with_foreground(svg_path: Path, foreground_hex: str):
@@ -206,6 +250,11 @@ def parse_args(argv=None):
         default="000",
         help="Background color for the circle clip (default: 000).",
     )
+    parser.add_argument(
+        "--annotate",
+        action="store_true",
+        help="Include PDF text annotations with the icon's relative path.",
+    )
 
     return parser.parse_args(argv)
 
@@ -273,6 +322,8 @@ def main(argv=None):
             grid_stroke_gray=GRID_STROKE_GRAY,
             circle_fill=background_color,
             foreground_hex=foreground_hex,
+            annotate=args.annotate,
+            tooltip_root=input_dir if args.annotate else None,
         )
 
     c.save()
