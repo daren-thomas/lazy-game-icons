@@ -6,7 +6,7 @@ import string
 import sys
 import argparse
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 from reportlab.lib.colors import Color, toColor
 from reportlab.lib.pagesizes import A4, landscape, portrait
@@ -37,6 +37,56 @@ def compute_grid(page_w: float, page_h: float, cell: float):
     off_x = (page_w - used_w) / 2.0
     off_y = (page_h - used_h) / 2.0
     return cols, rows, off_x, off_y
+
+
+def draw_page(
+    c: canvas.Canvas,
+    svgs: Sequence[Path],
+    *,
+    cols: int,
+    rows: int,
+    off_x: float,
+    off_y: float,
+    cell_size: float,
+    circle_diameter: float,
+    grid_stroke_pt: float,
+    grid_stroke_gray: float,
+    circle_fill: Color,
+    foreground_hex: str,
+    annotate: bool,
+    tooltip_root: Optional[Path],
+    flip: bool,
+) -> None:
+    if not svgs:
+        return
+
+    for row_index in range(rows):
+        start = row_index * cols
+        row_svgs = list(svgs[start : start + cols])
+        if not row_svgs:
+            break
+
+        if flip:
+            row_svgs = list(reversed(row_svgs))
+
+        for col_index, svg in enumerate(row_svgs):
+            cell_x = off_x + col_index * cell_size
+            cell_y = off_y + row_index * cell_size
+
+            draw_svg_clipped(
+                c,
+                svg,
+                cell_x,
+                cell_y,
+                cell_size=cell_size,
+                circle_diameter=circle_diameter,
+                grid_stroke_pt=grid_stroke_pt,
+                grid_stroke_gray=grid_stroke_gray,
+                circle_fill=circle_fill,
+                foreground_hex=foreground_hex,
+                annotate=annotate,
+                tooltip_root=tooltip_root,
+            )
 
 
 def draw_svg_clipped(
@@ -255,6 +305,11 @@ def parse_args(argv=None):
         action="store_true",
         help="Include PDF text annotations with the icon's relative path.",
     )
+    parser.add_argument(
+        "--flip",
+        action="store_true",
+        help="Generate a flipped companion page for double-sided printing.",
+    )
 
     return parser.parse_args(argv)
 
@@ -273,8 +328,8 @@ def main(argv=None):
     output_pdf.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        _foreground_color, foreground_hex = parse_color(args.foreground, default="fff")
-        background_color, _background_hex = parse_color(args.background, default="000")
+        foreground_color, foreground_hex = parse_color(args.foreground, default="fff")
+        background_color, background_hex = parse_color(args.background, default="000")
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
@@ -301,21 +356,20 @@ def main(argv=None):
     cols, rows, off_x, off_y = compute_grid(PAGE_WIDTH, PAGE_HEIGHT, CELL_SIZE)
     per_page = cols * rows
 
-    for idx, svg in enumerate(svgs):
-        cell_index = idx % per_page
-        if cell_index == 0 and idx != 0:
-            c.showPage()  # new page
+    tooltip_root = input_dir if args.annotate else None
+    pages = [svgs[i : i + per_page] for i in range(0, len(svgs), per_page)]
 
-        col = cell_index % cols
-        row = cell_index // cols
-        cell_x = off_x + col * CELL_SIZE
-        cell_y = off_y + row * CELL_SIZE
+    for page_index, page_svgs in enumerate(pages):
+        if page_index > 0:
+            c.showPage()
 
-        draw_svg_clipped(
+        draw_page(
             c,
-            svg,
-            cell_x,
-            cell_y,
+            page_svgs,
+            cols=cols,
+            rows=rows,
+            off_x=off_x,
+            off_y=off_y,
             cell_size=CELL_SIZE,
             circle_diameter=CIRCLE_DIAMETER,
             grid_stroke_pt=GRID_STROKE_PT,
@@ -323,13 +377,35 @@ def main(argv=None):
             circle_fill=background_color,
             foreground_hex=foreground_hex,
             annotate=args.annotate,
-            tooltip_root=input_dir if args.annotate else None,
+            tooltip_root=tooltip_root,
+            flip=False,
         )
 
+        if args.flip:
+            c.showPage()
+            draw_page(
+                c,
+                page_svgs,
+                cols=cols,
+                rows=rows,
+                off_x=off_x,
+                off_y=off_y,
+                cell_size=CELL_SIZE,
+                circle_diameter=CIRCLE_DIAMETER,
+                grid_stroke_pt=GRID_STROKE_PT,
+                grid_stroke_gray=GRID_STROKE_GRAY,
+                circle_fill=foreground_color,
+                foreground_hex=background_hex,
+                annotate=args.annotate,
+                tooltip_root=tooltip_root,
+                flip=True,
+            )
+
     c.save()
+    total_pages = len(pages) * (2 if args.flip else 1)
     print(
         f"✅ Wrote {len(svgs)} icons to {output_pdf} "
-        f"({cols}×{rows} cells; {per_page} icons/page; page={args.page})."
+        f"({cols}×{rows} cells; {per_page} icons/page; page={args.page}; pages={total_pages})."
     )
     return 0
 
